@@ -9,7 +9,7 @@
     "format": "prettier --write '**/*.{js,css,json,md}'"
   },
   "author": "Jacob <2037716+mrteenageparker@users.noreply.github.com>",
-  "license": "GPL-V3",
+  "license": "GPL-3.0",
   "devDependencies": {
     "prettier": "^1.18.2"
   }
