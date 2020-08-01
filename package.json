@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "name": "script-builder-backend",
+  "version": "1.0.0",
+  "description": "The backend for the script builder project",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format": "prettier --write '**/*.{js,css,json,md}'"
+  },
+  "author": "Jacob <2037716+mrteenageparker@users.noreply.github.com>",
+  "license": "GPL-V3",
+  "devDependencies": {
+    "prettier": "^1.18.2"
+  }
+}
