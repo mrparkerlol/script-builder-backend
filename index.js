@@ -62,6 +62,24 @@ end;]]></ProtectedString>
 </roblox>`;
 }
 
+async function generateError(errorMessage) {
+	return JSON.stringify({ error: true, message: errorMessage }), {
+		status: 500,
+		headers: {
+			"content-type": "application/json"
+		}
+	};
+}
+
+async function generateSuccess(message) {
+	return JSON.stringify({ error: false, message: message }), {
+		status: 200,
+		headers: {
+			"content-type": "application/json"
+		}
+	};
+}
+
 addEventListener('fetch', event => {
 	event.respondWith(handleRequest(event.request));
 });
@@ -85,9 +103,9 @@ async function getData(index, object) {
 async function handleRequest(request) {
 	const url = new URL(request.url);
 	const method = request.method;
-	if (method == "POST") {
-		if (url.pathname == "/post/uploadScript") {
-			try {
+	try {
+		if (method == "POST") {
+			if (url.pathname == "/post/uploadScript") {
 				const bodyUsed = await request.json();
 				const code = await generateCodeBody(bodyUsed.code.toString());
 				const assetId = bodyUsed.assetId.toString();
@@ -102,25 +120,18 @@ async function handleRequest(request) {
 					}
 				});
 
-				return new Response(await resp.text(), {
-					headers: { 'content-type': 'text/html' },
-				});
-			} catch(ex) {
-				return new Response("Error occured when posting to Roblox backend", {
-					headers: { 'content-type': 'text/plain' },
-				});
-			}
-		} else if (url.pathname == "/post/saveScript") {
-			try {
+				return resp.status == 200 ?
+					new Response(await generateSuccess(await resp.text())) :
+					new Response(await generateError(await resp.text()));
+			} else if (url.pathname == "/post/saveScript") {
 				const bodyUsed = await request.json();
 				const userId = parseInt(bodyUsed.userId);
 				const scriptName = bodyUsed.scriptName;
 				const code = bodyUsed.code;
 
-				if (userId != NaN) {
-					let exists = await getData("findScript", [scriptName, userId]);
-					exists = exists ? true : false;
-					if (!exists) {
+				if (userId != NaN && scriptName && code) {
+					const exists = await getData("findScript", [scriptName, userId]);
+					if (!exists ? true : false) {
 						await client.query(
 							q.Create(
 								q.Collection('scripts'),
@@ -134,45 +145,30 @@ async function handleRequest(request) {
 							)
 						);
 
-						return new Response("Successfully saved script", {
-							headers: { "content-type": "text/plain" },
-						});
+						return new Response(await generateSuccess("Successfully saved scripts"));
 					}
 
-					return new Response("Error: script already exists", {
-						status: 500,
-						headers: { "content-type": "text/plain" },
-					});
+					return new Response(await generateError("Script already exists"));
+				} else {
+					return new Response(await generateError("Invalid arguments to " + url.pathname));
 				}
-			} catch(ex) { }
-		} else if (url.pathname == "/post/getScript") {
-			try {
+			} else if (url.pathname == "/post/getScript") {
 				const bodyUsed = await request.json();
 				const userId = parseInt(bodyUsed.userId);
 				const scriptName = bodyUsed.scriptName;
 
-				if (userId != NaN) {
-					let result = await getData("findScript", [scriptName, userId]);
-					result = result ? { found: true, result: result } : { found: false, result: null };
-					return new Response(JSON.stringify(result), {
-						headers: {
-							"content-type": "text/json"
-						}
-					});
+				if (userId != NaN && scriptName) {
+					const result = await getData("findScript", [scriptName, userId]);
+					return new Response(await generateSuccess(
+						JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
+					));
 				} else {
-					return new Response("Error converting UserId to integer", {
-						headers: {
-							"content-type": "text/plain"
-						}
-					});
+					return new Response(await generateError("Invalid arguments to " + url.pathname));
 				}
-			} catch(ex) {
-				return new Response(ex, {
-					status: 500,
-					headers: { "content-type": "text-plain" },
-				});
 			}
 		}
+	} catch(ex) {
+		return new Response(await generateError(ex));
 	}
 
 	return new Response('<h1>API backend</h1>', {
