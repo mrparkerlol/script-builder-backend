@@ -12,5 +12,8 @@
   "license": "GPL-3.0",
   "devDependencies": {
     "prettier": "^1.18.2"
+  },
+  "dependencies": {
+    "faunadb": "^2.14.2"
   }
 }
