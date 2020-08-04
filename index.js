@@ -63,21 +63,21 @@ end;]]></ProtectedString>
 }
 
 async function generateError(errorMessage) {
-	return JSON.stringify({ error: true, message: errorMessage }), {
-		status: 500,
+	return new Response(JSON.stringify({ error: true, message: errorMessage }), {
+		status: 400,
 		headers: {
 			"content-type": "application/json"
 		}
-	};
+	});
 }
 
 async function generateSuccess(message) {
-	return JSON.stringify({ error: false, message: message }), {
+	return new Response(JSON.stringify({ error: false, message: message }), {
 		status: 200,
 		headers: {
 			"content-type": "application/json"
 		}
-	};
+	});
 }
 
 addEventListener('fetch', event => {
@@ -121,17 +121,17 @@ async function handleRequest(request) {
 				});
 
 				return resp.status == 200 ?
-					new Response(await generateSuccess(await resp.text())) :
-					new Response(await generateError(await resp.text()));
+					await generateSuccess(await resp.text()) :
+					await generateError(await resp.text());
 			} else if (url.pathname == "/post/saveScript") {
 				const bodyUsed = await request.json();
 				const userId = parseInt(bodyUsed.userId);
 				const scriptName = bodyUsed.scriptName;
 				const code = bodyUsed.code;
 
-				if (userId != NaN && scriptName && code) {
+				if (userId && userId != NaN && scriptName && code) {
 					const exists = await getData("findScript", [scriptName, userId]);
-					if (!exists ? true : false) {
+					if (!(exists ? true : false)) {
 						await client.query(
 							q.Create(
 								q.Collection('scripts'),
@@ -145,12 +145,12 @@ async function handleRequest(request) {
 							)
 						);
 
-						return new Response(await generateSuccess("Successfully saved scripts"));
+						return await generateSuccess("Successfully saved scripts");
 					}
 
-					return new Response(await generateError("Script already exists"));
+					return await generateError("Script already exists");
 				} else {
-					return new Response(await generateError("Invalid arguments to " + url.pathname));
+					return await generateError("Invalid arguments to " + url.pathname);
 				}
 			} else if (url.pathname == "/post/getScript") {
 				const bodyUsed = await request.json();
@@ -159,16 +159,16 @@ async function handleRequest(request) {
 
 				if (userId != NaN && scriptName) {
 					const result = await getData("findScript", [scriptName, userId]);
-					return new Response(await generateSuccess(
+					return await generateSuccess(
 						JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
-					));
+					);
 				} else {
-					return new Response(await generateError("Invalid arguments to " + url.pathname));
+					return await generateError("Invalid arguments to " + url.pathname);
 				}
 			}
 		}
-	} catch(ex) {
-		return new Response(await generateError(ex));
+	} catch (ex) {
+		return await generateError("An internal server error occured. Please try again later.");
 	}
 
 	return new Response('<h1>API backend</h1>', {
