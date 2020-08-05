@@ -13,17 +13,19 @@ Requires the following prerequisites:
 - Wrangler CLI tool (https://developers.cloudflare.com/workers/tooling/wrangler/install)
 - Rust or Node toolchains (required by Wrangler) (https://www.rust-lang.org or https://nodejs.org/en)
 - NodeJS for installing dependencies (https://nodejs.org/en)
-- A FaunaDB account (https://fauna.com)
+- A FaunaDB account for storing created scripts (https://fauna.com)
+- A Roblox account dedicated to uploading the local scripts, sandboxing module scripts and for validating API requests (https://roblox.com/)
 
 The project has the following dependencies:
 
-- FaunaDB (https://www.npmjs.com/package/faunadb)
+- FaunaDB (for script storage) (https://www.npmjs.com/package/faunadb)
 
 An example config.js:
 
 ```
 module.exports = {
-	robloxSecret: "", // .ROBLOSECURITY cookie for alternate account
-	fauanaSecret: "" // Secret for faunaDB
+	robloxSecret: "_|WARNING:-DO-NOT-SHARE-THIS..."; // .ROBLOSECURITY cookie for alternate account
+	fauanaSecret: "abcdefghijklmnopqrstuvwxyz1234567890"; // Secret for FaunaDB
+	placeId: 1818; // The place ID for the script builder
 }
 ```

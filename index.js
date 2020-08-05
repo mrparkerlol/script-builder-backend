@@ -1,174 +1,61 @@
-const config = require('./config');
-const rbxCookie = config.robloxSecret;
-const faunaSecret = config.faunaSecret;
-
-var faunadb = require('faunadb'),
-	q = faunadb.query;
-
-var client = new faunadb.Client({
-	secret: faunaSecret,
-	fetch: fetch.bind(globalThis)
-});
-
-async function generateCodeBody(code) {
-	return `<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-<Meta name="ExplicitAutoJoints">true</Meta>
-<External>null</External>
-<External>nil</External>
-<Item class="LocalScript" referent="RBX2160BD1F826C450A8F2B7E3AC77849C9">
-<Properties>
-<BinaryString name="AttributesSerialize"></BinaryString>
-<bool name="Disabled">true</bool>
-<Content name="LinkedSource"><null></null></Content>
-<string name="Name">LocalScript</string>
-<string name="ScriptGuid">{0E46D412-3104-4684-9119-9515C1822CF2}</string>
-<ProtectedString name="Source"><![CDATA[local config = shared(script, getfenv());
-local environment = config and config.environment;
-
-local success, source = pcall(function()
-	return require(script:WaitForChild("LSource"));
-end);
-
-script:ClearAllChildren();
-
-if success then
-	setfenv(0, environment);
-	setfenv(1, environment);
-	setfenv(source, environment);
-	spawn(function()
-		shared("Output", {
-			Type = "general",
-			Message = "Ran local script",
-		});
-
-		source();
-	end);
-else
-	error(source, 0);
-end;]]></ProtectedString>
-<BinaryString name="Tags"></BinaryString>
-</Properties>
-<Item class="ModuleScript" referent="RBX066B198861FE488184CF42EEF7F3A894">
-<Properties>
-<BinaryString name="AttributesSerialize"></BinaryString>
-<Content name="LinkedSource"><null></null></Content>
-<string name="Name">LSource</string>
-<string name="ScriptGuid">{85DF8BE5-8F00-4F18-9A2F-70F141465182}</string>
-<ProtectedString name="Source"><![CDATA[return function()` + code + ` end]]></ProtectedString>
-<BinaryString name="Tags"></BinaryString>
-</Properties>
-</Item>
-</Item>
-</roblox>`;
-}
-
-async function generateError(errorMessage) {
-	return new Response(JSON.stringify({ error: true, message: errorMessage }), {
-		status: 400,
-		headers: {
-			"content-type": "application/json"
-		}
-	});
-}
-
-async function generateSuccess(message) {
-	return new Response(JSON.stringify({ error: false, message: message }), {
-		status: 200,
-		headers: {
-			"content-type": "application/json"
-		}
-	});
-}
+import { uploadScript } from './modules/asset';
+import { getData, writeData } from './modules/db';
+import { validateGame } from './modules/game';
+import {generateSuccess, generateError } from './modules/helpers';
 
 addEventListener('fetch', event => {
 	event.respondWith(handleRequest(event.request));
 });
 
-async function getData(index, object) {
-	try {
-		var result = await client.query(
-			q.Get(
-				q.Match(
-					q.Index(index), object
-				)
-			)
-		);
-
-		return result.data ? result.data : null;
-	} catch(ex) {
-		return false;
-	}
-}
-
 async function handleRequest(request) {
-	const url = new URL(request.url);
-	const method = request.method;
 	try {
+		const url = new URL(request.url);
+		const method = request.method;
+
 		if (method == "POST") {
-			if (url.pathname == "/post/uploadScript") {
-				const bodyUsed = await request.json();
-				const code = await generateCodeBody(bodyUsed.code.toString());
-				const assetId = bodyUsed.assetId.toString();
-				const resp = await fetch(new Request("https://data.roblox.com/Data/Upload.ashx?json=1&assetid=" + assetId), {
-					method: "POST",
-					body: code,
-					headers: {
-						"cookie": ".ROBLOSECURITY=" + rbxCookie,
-						"content-type": "application/xml",
-						"content-length": code.length,
-						"connection": "keep-alive",
+			const bodyUsed = await request.json();
+			const jobIdFound = await validateGame(request.headers.get("cf-connecting-ip"), bodyUsed.jobId);
+			if (jobIdFound) {
+				if (url.pathname == "/post/uploadScript") {
+					return await uploadScript(bodyUsed);
+				} else if (url.pathname == "/post/saveScript") {
+					const userId = parseInt(bodyUsed.userId);
+					const scriptName = bodyUsed.scriptName;
+					const code = bodyUsed.code;
+					if (userId && userId != NaN && scriptName && code) {
+						const exists = await getData("findScript", [scriptName, userId]);
+						if (!(exists ? true : false)) {
+							const success = await writeData('scripts', {
+								userId: userId,
+								scriptName: scriptName,
+								code: code
+							});
+
+							return await generateSuccess("Successfully saved scripts");
+						}
+
+						return await generateError("Script already exists");
+					} else {
+						return await generateError("Invalid arguments to " + url.pathname);
 					}
-				});
-
-				return resp.status == 200 ?
-					await generateSuccess(await resp.text()) :
-					await generateError(await resp.text());
-			} else if (url.pathname == "/post/saveScript") {
-				const bodyUsed = await request.json();
-				const userId = parseInt(bodyUsed.userId);
-				const scriptName = bodyUsed.scriptName;
-				const code = bodyUsed.code;
-
-				if (userId && userId != NaN && scriptName && code) {
-					const exists = await getData("findScript", [scriptName, userId]);
-					if (!(exists ? true : false)) {
-						await client.query(
-							q.Create(
-								q.Collection('scripts'),
-								{
-									data: {
-										userId: userId,
-										scriptName: scriptName,
-										code: code
-									}
-								}
-							)
+				} else if (url.pathname == "/post/getScript") {
+					const userId = parseInt(bodyUsed.userId);
+					const scriptName = bodyUsed.scriptName;
+					if (userId != NaN && scriptName) {
+						const result = await getData("findScript", [scriptName, userId]);
+						return await generateSuccess(
+							JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
 						);
-
-						return await generateSuccess("Successfully saved scripts");
+					} else {
+						return await generateError("Invalid arguments to " + url.pathname);
 					}
-
-					return await generateError("Script already exists");
-				} else {
-					return await generateError("Invalid arguments to " + url.pathname);
 				}
-			} else if (url.pathname == "/post/getScript") {
-				const bodyUsed = await request.json();
-				const userId = parseInt(bodyUsed.userId);
-				const scriptName = bodyUsed.scriptName;
-
-				if (userId != NaN && scriptName) {
-					const result = await getData("findScript", [scriptName, userId]);
-					return await generateSuccess(
-						JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
-					);
-				} else {
-					return await generateError("Invalid arguments to " + url.pathname);
-				}
+			} else {
+				return await generateError("Unauthorized.", 401);
 			}
 		}
 	} catch (ex) {
-		return await generateError("An internal server error occured. Please try again later.");
+		return await generateError("An internal server error occured. Please try again later. " + ex, 500);
 	}
 
 	return new Response('<h1>API backend</h1>', {
