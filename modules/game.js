@@ -101,16 +101,19 @@ export async function addInstance(ip, jobId, GUID) {
 	// Validate the instance first
 	const validInstance = await validateRunningInstance(ip, jobId);
 	if (validInstance) {
-		// Write to the database with the given GUID
-		const success = await writeData("servers", {
-			"ip": ip,
-			"jobId": jobId,
-			"GUID": GUID
-		});
+		const exists = await getData("findInstance", [jobId, GUID, ip]);
+		if (!exists) {
+			// Write to the database with the given GUID
+			const success = await writeData("servers", {
+				"ip": ip,
+				"jobId": jobId,
+				"GUID": GUID
+			});
 
-		// Return true on success, return false on failure
-		if (success) {
-			return true;
+			// Return true on success, return false on failure
+			if (success) {
+				return true;
+			}
 		}
 	}
 

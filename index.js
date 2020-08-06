@@ -16,6 +16,8 @@ async function handleRequest(request) {
 		if (method == "POST") {
 			const bodyUsed = await request.json();
 			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+
+			// Authenticated server routes
 			if (serverValidated) {
 				const data = bodyUsed.data;
 				if (url.pathname == "/post/uploadScript") {
@@ -56,31 +58,32 @@ async function handleRequest(request) {
 						return await generateError("Invalid arguments to " + url.pathname);
 					}
 				}
-			} else {
-				if (url.pathname == "/post/registerServer") {
-					const robloxId = request.headers.get("roblox-id");
-					if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
-						const success = await addInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
-						if (success) {
-							return await generateSuccess("Successfully added server instance");
-						} else {
-							return await generateError("Failed to add server instance - future requests to this API backend will fail", 500);
-						}
-					}
-				} else if (url.pathname == "/post/unRegisterServer") {
-					const robloxId = request.headers.get("roblox-id");
-					if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
-						const success = await removeInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
-						if (success) {
-							return await generateSuccess("Successfully deleted instance");
-						} else {
-							return await generateError("Failed to delete instance - make sure it exists");
-						}
+			}
+
+			// Un-authenticated server routes
+			if (url.pathname == "/post/registerServer") {
+				const robloxId = request.headers.get("roblox-id");
+				if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
+					const success = await addInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+					if (success) {
+						return await generateSuccess("Successfully added server instance");
+					} else {
+						return await generateError("Failed to add server instance - make sure the server instance isn't already registered");
 					}
 				}
-
-				return await generateError("Unauthorized.", 401);
+			} else if (url.pathname == "/post/unRegisterServer") {
+				const robloxId = request.headers.get("roblox-id");
+				if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
+					const success = await removeInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+					if (success) {
+						return await generateSuccess("Successfully deleted instance");
+					} else {
+						return await generateError("Failed to delete instance - make sure it exists");
+					}
+				}
 			}
+
+			return await generateError("Unauthorized.", 401);
 		}
 	} catch (ex) {
 		return await generateError("An internal server error occured. Please try again later. " + ex, 500);
