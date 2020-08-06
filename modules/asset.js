@@ -1,8 +1,8 @@
 const config = require('../config');
-import { generateCodeBody } from './helpers';
+import { generateCodeBody, generateSuccess, generateError } from './helpers';
 
 export async function uploadScript(bodyUsed) {
-	const code = await generateCodeBody(bodyUsed.code.toString());
+	const code = await generateCodeBody(bodyUsed.code);
 	const assetId = bodyUsed.assetId.toString();
 	const resp = await fetch(new Request("https://data.roblox.com/Data/Upload.ashx?json=1&assetid=" + assetId), {
 		method: "POST",
@@ -20,6 +20,6 @@ export async function uploadScript(bodyUsed) {
 		await generateError(await resp.text());
 }
 
-export async function getModule(bodyUsed) {
+export async function getAsset(bodyUsed) {
 	throw "Not implemented yet";
 }

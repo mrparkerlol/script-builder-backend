@@ -49,3 +49,37 @@ export async function writeData(collection, data) {
 		return ex;
 	}
 }
+
+/*
+	async function deleteData();
+	Deletes data at specified index
+*/
+export async function deleteData(index, data) {
+	try {
+	    var data = await client.query(
+			q.Get(
+				q.Match(
+					q.Index(index), data
+				)
+			)
+		);
+
+		if (data) {
+			const ref = data.ref;
+			await client.query(
+				q.Delete(
+					q.Ref(
+						q.Collection("servers"),
+						ref.value.id
+					)
+				)
+			)
+
+			return true;
+		} else {
+			return false;
+		}
+	} catch(ex) {
+		return ex;
+	}
+}

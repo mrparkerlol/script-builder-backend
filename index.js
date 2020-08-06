@@ -1,7 +1,8 @@
 import { uploadScript } from './modules/asset';
 import { getData, writeData } from './modules/db';
-import { validateGame } from './modules/game';
+import { validateInstance, addInstance, removeInstance } from './modules/game';
 import {generateSuccess, generateError } from './modules/helpers';
+import { placeId } from './config';
 
 addEventListener('fetch', event => {
 	event.respondWith(handleRequest(event.request));
@@ -14,14 +15,15 @@ async function handleRequest(request) {
 
 		if (method == "POST") {
 			const bodyUsed = await request.json();
-			const jobIdFound = await validateGame(request.headers.get("cf-connecting-ip"), bodyUsed.jobId);
-			if (jobIdFound) {
+			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+			if (serverValidated) {
+				const data = bodyUsed.data;
 				if (url.pathname == "/post/uploadScript") {
-					return await uploadScript(bodyUsed);
+					return await uploadScript(data);
 				} else if (url.pathname == "/post/saveScript") {
-					const userId = parseInt(bodyUsed.userId);
-					const scriptName = bodyUsed.scriptName;
-					const code = bodyUsed.code;
+					const userId = parseInt(data.userId);
+					const scriptName = data.scriptName;
+					const code = data.code;
 					if (userId && userId != NaN && scriptName && code) {
 						const exists = await getData("findScript", [scriptName, userId]);
 						if (!(exists ? true : false)) {
@@ -31,7 +33,11 @@ async function handleRequest(request) {
 								code: code
 							});
 
-							return await generateSuccess("Successfully saved scripts");
+							if (success) {
+								return await generateSuccess("Successfully saved script");
+							} else {
+								return await generateError("Failed to save scripts");
+							}
 						}
 
 						return await generateError("Script already exists");
@@ -39,8 +45,8 @@ async function handleRequest(request) {
 						return await generateError("Invalid arguments to " + url.pathname);
 					}
 				} else if (url.pathname == "/post/getScript") {
-					const userId = parseInt(bodyUsed.userId);
-					const scriptName = bodyUsed.scriptName;
+					const userId = parseInt(data.userId);
+					const scriptName = data.scriptName;
 					if (userId != NaN && scriptName) {
 						const result = await getData("findScript", [scriptName, userId]);
 						return await generateSuccess(
@@ -51,6 +57,28 @@ async function handleRequest(request) {
 					}
 				}
 			} else {
+				if (url.pathname == "/post/registerServer") {
+					const robloxId = request.headers.get("roblox-id");
+					if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
+						const success = await addInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+						if (success) {
+							return await generateSuccess("Successfully added server instance");
+						} else {
+							return await generateError("Failed to add server instance - future requests to this API backend will fail", 500);
+						}
+					}
+				} else if (url.pathname == "/post/unRegisterServer") {
+					const robloxId = request.headers.get("roblox-id");
+					if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
+						const success = await removeInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+						if (success) {
+							return await generateSuccess("Successfully deleted instance");
+						} else {
+							return await generateError("Failed to delete instance - make sure it exists");
+						}
+					}
+				}
+
 				return await generateError("Unauthorized.", 401);
 			}
 		}
