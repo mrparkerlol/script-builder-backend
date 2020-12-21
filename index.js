@@ -1,8 +1,7 @@
-import { uploadScript } from './modules/asset';
+import { uploadLocalScript, deleteLocalScript } from './modules/asset';
 import { getData, writeData } from './modules/db';
 import { validateInstance, addInstance, removeInstance } from './modules/game';
-import {generateSuccess, generateError } from './modules/helpers';
-import { placeId } from './config';
+import { generateSuccess, generateError } from './modules/helpers';
 
 addEventListener('fetch', event => {
 	event.respondWith(handleRequest(event.request));
@@ -15,75 +14,83 @@ async function handleRequest(request) {
 
 		if (method == "POST") {
 			const bodyUsed = await request.json();
-			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
+			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID);
 
 			// Authenticated server routes
 			if (serverValidated) {
 				const data = bodyUsed.data;
-				if (url.pathname == "/post/uploadScript") {
-					return await uploadScript(data);
-				} else if (url.pathname == "/post/saveScript") {
-					const userId = parseInt(data.userId);
-					const scriptName = data.scriptName;
-					const code = data.code;
-					if (userId && userId != NaN && scriptName && code) {
-						const exists = await getData("findScript", [scriptName, userId]);
-						if (!(exists ? true : false)) {
-							const success = await writeData('scripts', {
-								userId: userId,
-								scriptName: scriptName,
-								code: code
-							});
-
+				switch(url.pathname) {
+					case "/api/uploadLocalScript": {
+						return await uploadLocalScript(data);
+					}
+					case "/api/deleteLocalScript": {
+						return await deleteLocalScript(data);
+					}
+					case "/api/saveScript": {
+						const userId = parseInt(data.userId);
+						const scriptName = data.scriptName;
+						const code = data.code;
+						if (userId && userId != NaN && scriptName && code) {
+							const exists = await getData("findScript", [scriptName, userId]);
+							if (!(exists ? true : false)) {
+								const success = await writeData('scripts', {
+									userId: userId,
+									scriptName: scriptName,
+									code: code
+								});
+	
+								if (success) {
+									return await generateSuccess("Successfully saved script");
+								} else {
+									return await generateError("Failed to save scripts");
+								}
+							}
+	
+							return await generateError("Script already exists");
+						} else {
+							return await generateError("Invalid arguments to " + url.pathname);
+						}
+					}
+					case "/api/getScript": {
+						const userId = parseInt(data.userId);
+						const scriptName = data.scriptName;
+						if (userId != NaN && scriptName) {
+							const result = await getData("findScript", [scriptName, userId, request.headers.get("Roblox-Id")]);
+							return await generateSuccess(
+								JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
+							);
+						} else {
+							return await generateError("Invalid arguments to " + url.pathname);
+						}
+					}
+				}
+			} else {
+				// Un-authenticated server routes
+				switch(url.pathname) {
+					case "/api/registerServer": {
+						if (bodyUsed.jobId && bodyUsed.GUID) {
+							const success = await addInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID);
 							if (success) {
-								return await generateSuccess("Successfully saved script");
+								return await generateSuccess("Successfully added server instance");
 							} else {
-								return await generateError("Failed to save scripts");
+								return await generateError("Failed to add server instance - make sure the server instance isn't already registered");
 							}
 						}
-
-						return await generateError("Script already exists");
-					} else {
-						return await generateError("Invalid arguments to " + url.pathname);
 					}
-				} else if (url.pathname == "/post/getScript") {
-					const userId = parseInt(data.userId);
-					const scriptName = data.scriptName;
-					if (userId != NaN && scriptName) {
-						const result = await getData("findScript", [scriptName, userId]);
-						return await generateSuccess(
-							JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
-						);
-					} else {
-						return await generateError("Invalid arguments to " + url.pathname);
+					case "/api/unRegisterServer": {
+						if (bodyUsed.jobId && bodyUsed.GUID) {
+							const success = await removeInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID);
+							if (success) {
+								return await generateSuccess("Successfully deleted instance");
+							} else {
+								return await generateError("Failed to delete instance - make sure it exists");
+							}
+						}
 					}
 				}
 			}
 
-			// Un-authenticated server routes
-			if (url.pathname == "/post/registerServer") {
-				const robloxId = request.headers.get("roblox-id");
-				if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
-					const success = await addInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
-					if (success) {
-						return await generateSuccess("Successfully added server instance");
-					} else {
-						return await generateError("Failed to add server instance - make sure the server instance isn't already registered");
-					}
-				}
-			} else if (url.pathname == "/post/unRegisterServer") {
-				const robloxId = request.headers.get("roblox-id");
-				if (robloxId == placeId && bodyUsed.jobId && bodyUsed.GUID) {
-					const success = await removeInstance(request.headers.get("cf-connecting-ip"), bodyUsed.jobId, bodyUsed.GUID);
-					if (success) {
-						return await generateSuccess("Successfully deleted instance");
-					} else {
-						return await generateError("Failed to delete instance - make sure it exists");
-					}
-				}
-			}
-
-			return await generateError("Unauthorized.", 401);
+			return await generateError("Request failure: Server instance is not authenticated, or path doesn't exist.");
 		}
 	} catch (ex) {
 		return await generateError("An internal server error occured. Please try again later. " + ex, 500);

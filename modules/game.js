@@ -13,7 +13,6 @@ import { getData, writeData, deleteData } from './db';
 
 const config = require('../config');
 const robloxSecret = config.robloxSecret;
-const placeId = config.placeId;
 
 /*
 	async function validateInstance();
@@ -23,7 +22,7 @@ const placeId = config.placeId;
 
 	Primarily based off of rocheck (located: https://github.com/grilme99/RoCheck)
 */
-export async function validateRunningInstance(ip, jobId) {
+export async function validateRunningInstance(ip, placeId, jobId) {
 	try {
 		// Fetch from the Roblox website whether or not the instance is valid
 		const req = await fetch(new Request(`https://assetgame.roblox.com/Game/PlaceLauncher.ashx?request=RequestGameJob&placeId=${placeId}&gameId=${jobId}`), {
@@ -61,7 +60,7 @@ export async function validateRunningInstance(ip, jobId) {
 }
 
 /*
-	async function validateRunningInstance();
+	async function validateInstance();
 
 	Validates whether or not the instance passed is valid or not
 	with a GUID - specifically for already running instances
@@ -71,17 +70,17 @@ export async function validateRunningInstance(ip, jobId) {
 	running in it - this is what is protecting the backend
 	from spoofed requests
 */
-export async function validateInstance(ip, jobId, GUID) {
+export async function validateInstance(ip, placeId, jobId, GUID) {
 	// Checks if the instance exists on Roblox
 	// If it does exist, further checks are made
 	// to validate the server
-	const validInstance = await validateRunningInstance(ip, jobId);
+	const validInstance = await validateRunningInstance(ip, placeId, jobId);
 	if (validInstance) {
 		// Checks with database for the instance
 		// of the game, if it does exist, then it
 		// will return true - or just return false
 		// if it isn't valid
-		const instanceExists = await getData("findInstance", [jobId, GUID, ip]);
+		const instanceExists = await getData("findInstance", [jobId, placeId, GUID, ip]);
 		if (instanceExists && instanceExists.GUID == GUID && instanceExists.jobId == jobId && instanceExists.ip == ip) { // one final sanity check
 			return true;
 		}
@@ -97,15 +96,16 @@ export async function validateInstance(ip, jobId, GUID) {
 	Adds a instance after validation to the
 	database of known instances
 */
-export async function addInstance(ip, jobId, GUID) {
+export async function addInstance(ip, placeId, jobId, GUID) {
 	// Validate the instance first
-	const validInstance = await validateRunningInstance(ip, jobId);
+	const validInstance = await validateRunningInstance(ip, placeId, jobId);
 	if (validInstance) {
-		const exists = await getData("findInstanceIsRegistered", [ip, jobId]);
+		const exists = await getData("findInstanceIsRegistered", [ip, placeId, jobId]);
 		if (!exists) {
 			// Write to the database with the given GUID
 			const success = await writeData("servers", {
 				"ip": ip,
+				"placeId": placeId, 
 				"jobId": jobId,
 				"GUID": GUID
 			});
@@ -127,7 +127,7 @@ export async function addInstance(ip, jobId, GUID) {
 	be called when the game is shutting down
 	cause then subsequent requests will fail
 */
-export async function removeInstance(ip, jobId, GUID) {
-	const deleted = await deleteData("findInstance", [jobId, GUID, ip]);
+export async function removeInstance(ip, robloxId, jobId, GUID) {
+	const deleted = await deleteData("findInstance", [jobId, robloxId, GUID, ip]);
 	return deleted == true ? true : false;
 }
