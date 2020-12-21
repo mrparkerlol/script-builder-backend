@@ -9,4 +9,4 @@ worker/
 node_modules/
 .cargo-ok
 /config.js
-wrangler.toml
+/wrangler.toml
