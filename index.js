@@ -14,7 +14,7 @@ async function handleRequest(request) {
 
 		if (method == "POST") {
 			const bodyUsed = await request.json();
-			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID);
+			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID, request.cf.asn);
 
 			// Authenticated server routes
 			if (serverValidated) {
@@ -38,14 +38,14 @@ async function handleRequest(request) {
 									scriptName: scriptName,
 									code: code
 								});
-	
+
 								if (success) {
 									return await generateSuccess("Successfully saved script");
 								} else {
 									return await generateError("Failed to save scripts");
 								}
 							}
-	
+
 							return await generateError("Script already exists");
 						} else {
 							return await generateError("Invalid arguments to " + url.pathname);
@@ -69,7 +69,7 @@ async function handleRequest(request) {
 				switch(url.pathname) {
 					case "/api/registerServer": {
 						if (bodyUsed.jobId && bodyUsed.GUID) {
-							const success = await addInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID);
+							const success = await addInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID, request.cf.asn);
 							if (success) {
 								return await generateSuccess("Successfully added server instance");
 							} else {

@@ -13,6 +13,7 @@ import { getData, writeData, deleteData } from './db';
 
 const config = require('../config');
 const robloxSecret = config.robloxSecret;
+const robloxASN = 22697;
 
 /*
 	async function validateInstance();
@@ -22,7 +23,7 @@ const robloxSecret = config.robloxSecret;
 
 	Primarily based off of rocheck (located: https://github.com/grilme99/RoCheck)
 */
-export async function validateRunningInstance(ip, placeId, jobId) {
+export async function validateRunningInstance(ip, placeId, jobId, asn) {
 	try {
 		// Fetch from the Roblox website whether or not the instance is valid
 		const req = await fetch(new Request(`https://assetgame.roblox.com/Game/PlaceLauncher.ashx?request=RequestGameJob&placeId=${placeId}&gameId=${jobId}`), {
@@ -40,14 +41,18 @@ export async function validateRunningInstance(ip, placeId, jobId) {
 		const reqJSON = await req.json();
 
 		// Did it return the joinScriptUrl?
-		if (reqJSON && reqJSON.joinScriptUrl) {
+		if (reqJSON && reqJSON.status == 2) {
 			const joinScriptReq = await fetch(new Request(reqJSON.joinScriptUrl)); // We have to fetch the URL
 			let joinScriptJSON = await joinScriptReq.text(); // Returns the text of the request
 			joinScriptJSON = JSON.parse(joinScriptJSON.replace(/--.*\r\n/, '')); // This line is needed to prevent JSON parse errors
 			// Validate the MachineAddress matches the request IP
-			// Validating the JobID is a sanity check to make sure
-			// it is really valid
-			if (joinScriptJSON && joinScriptJSON.MachineAddress == ip && reqJSON.jobId == jobId) {
+			// or the ASN is Roblox's if it is a private server of
+			// some kind
+			if (joinScriptJSON && (joinScriptJSON.MachineAddress == ip && reqJSON.jobId == jobId)) {
+				return true;
+			}
+		} else if (reqJSON && reqJSON.status == 12) {
+			if (asn == robloxASN && reqJSON.jobId == `JoinGame=${placeId};${jobId}`) {
 				return true;
 			}
 		}
@@ -70,11 +75,11 @@ export async function validateRunningInstance(ip, placeId, jobId) {
 	running in it - this is what is protecting the backend
 	from spoofed requests
 */
-export async function validateInstance(ip, placeId, jobId, GUID) {
+export async function validateInstance(ip, placeId, jobId, GUID, asn) {
 	// Checks if the instance exists on Roblox
 	// If it does exist, further checks are made
 	// to validate the server
-	const validInstance = await validateRunningInstance(ip, placeId, jobId);
+	const validInstance = await validateRunningInstance(ip, placeId, jobId, asn);
 	if (validInstance) {
 		// Checks with database for the instance
 		// of the game, if it does exist, then it
@@ -96,16 +101,16 @@ export async function validateInstance(ip, placeId, jobId, GUID) {
 	Adds a instance after validation to the
 	database of known instances
 */
-export async function addInstance(ip, placeId, jobId, GUID) {
+export async function addInstance(ip, placeId, jobId, GUID, asn) {
 	// Validate the instance first
-	const validInstance = await validateRunningInstance(ip, placeId, jobId);
+	const validInstance = await validateRunningInstance(ip, placeId, jobId, asn);
 	if (validInstance) {
 		const exists = await getData("findInstanceIsRegistered", [ip, placeId, jobId]);
 		if (!exists) {
 			// Write to the database with the given GUID
 			const success = await writeData("servers", {
 				"ip": ip,
-				"placeId": placeId, 
+				"placeId": placeId,
 				"jobId": jobId,
 				"GUID": GUID
 			});
