@@ -25,7 +25,7 @@ An example config.js:
 ```
 module.exports = {
 	robloxSecret: "_|WARNING:-DO-NOT-SHARE-THIS...", // .ROBLOSECURITY cookie for alternate account
-	fauanaSecret: "abcdefghijklmnopqrstuvwxyz1234567890", // Secret for FaunaDB
+	faunaSecret: "abcdefghijklmnopqrstuvwxyz1234567890", // Secret for FaunaDB
 }
 ```
 
