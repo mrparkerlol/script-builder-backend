@@ -25,6 +25,7 @@ export async function uploadLocalScript(bodyUsed) {
 		body: code,
 		headers: {
 			"cookie": ".ROBLOSECURITY=" + config.robloxSecret,
+			"X-CSRF-TOKEN": await getCSRFToken(),
 			"content-type": "application/xml",
 			"content-length": code.length,
 			"connection": "keep-alive",
@@ -43,6 +44,7 @@ export async function deleteLocalScript(bodyUsed) {
 			body: defaultCode,
 			headers: {
 				"cookie": ".ROBLOSECURITY=" + config.robloxSecret,
+				"X-CSRF-TOKEN": await getCSRFToken(),
 				"content-type": "application/xml",
 				"content-length": defaultCode.length,
 				"connection": "keep-alive",
