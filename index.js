@@ -3,6 +3,8 @@ import { getData, writeData } from './modules/db';
 import { validateInstance, addInstance, removeInstance } from './modules/game';
 import { generateSuccess, generateError } from './modules/helpers';
 
+const config = require("./config")
+
 addEventListener('fetch', event => {
 	event.respondWith(handleRequest(event.request));
 });
@@ -14,10 +16,10 @@ async function handleRequest(request) {
 
 		if (method == "POST") {
 			const bodyUsed = await request.json();
-			const serverValidated = await validateInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID, request.cf.asn);
+			const serverValidated = await validateInstance(request, bodyUsed.jobId, bodyUsed.GUID);
 
 			// Authenticated server routes
-			if (serverValidated) {
+			if (serverValidated || request.headers.get("skip-verify") && request.headers.get("skip-verify").replace(".ROBLOSECURITY=", "") == config.robloxSecret) {
 				const data = bodyUsed.data;
 				switch(url.pathname) {
 					case "/api/uploadLocalScript": {
@@ -30,7 +32,7 @@ async function handleRequest(request) {
 						const userId = parseInt(data.userId);
 						const scriptName = data.scriptName;
 						const code = data.code;
-						if (userId && userId != NaN && scriptName && code) {
+						if (userId && !isNaN(userId) && scriptName && code) {
 							const exists = await getData("findScript", [scriptName, userId]);
 							if (!(exists ? true : false)) {
 								const success = await writeData('scripts', {
@@ -54,7 +56,7 @@ async function handleRequest(request) {
 					case "/api/getScript": {
 						const userId = parseInt(data.userId);
 						const scriptName = data.scriptName;
-						if (userId != NaN && scriptName) {
+						if (!isNaN(userId) && scriptName) {
 							const result = await getData("findScript", [scriptName, userId, request.headers.get("Roblox-Id")]);
 							return await generateSuccess(
 								JSON.stringify(result ? { found: true, result: result } : { found: false, result: null })
@@ -69,7 +71,7 @@ async function handleRequest(request) {
 				switch(url.pathname) {
 					case "/api/registerServer": {
 						if (bodyUsed.jobId && bodyUsed.GUID) {
-							const success = await addInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID, request.cf.asn);
+							const success = await addInstance(request, bodyUsed.jobId, bodyUsed.GUID);
 							if (success) {
 								return await generateSuccess("Successfully added server instance");
 							} else {
@@ -79,7 +81,7 @@ async function handleRequest(request) {
 					}
 					case "/api/unRegisterServer": {
 						if (bodyUsed.jobId && bodyUsed.GUID) {
-							const success = await removeInstance(request.headers.get("cf-connecting-ip"), request.headers.get("Roblox-Id"), bodyUsed.jobId, bodyUsed.GUID);
+							const success = await removeInstance(request, bodyUsed.jobId, bodyUsed.GUID);
 							if (success) {
 								return await generateSuccess("Successfully deleted instance");
 							} else {

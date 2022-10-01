@@ -23,41 +23,46 @@ const robloxASN = 22697;
 
 	Primarily based off of rocheck (located: https://github.com/grilme99/RoCheck)
 */
-export async function validateRunningInstance(ip, placeId, jobId, asn) {
-	try {
-		// Fetch from the Roblox website whether or not the instance is valid
-		const req = await fetch(new Request(`https://assetgame.roblox.com/Game/PlaceLauncher.ashx?request=RequestGameJob&placeId=${placeId}&gameId=${jobId}`), {
-			method: "GET",
-			headers: {
-				"cookie": `.ROBLOSECURITY=${robloxSecret}; path=/; domain=.roblox.com;`,
-				"referer": `https://www.roblox.com/games/${placeId}/`,
-				"origin": "https://www.roblox.com",
-				"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:79.0) Gecko/20100101 Firefox/79.0",
-				"connection": "keep-alive",
-			}
-		});
+export async function validateRunningInstance(req, jobId) {
+	if (req.cf.asn == robloxASN) {
+		try {
+			// Fetch from the Roblox website whether or not the instance is valid
+			const req = await fetch(new Request(`https://games.roblox.com/v1/games/${req.headers.get("roblox-id")}/servers/Public?sortOrder=Asc&limit=100`), {
+				method: "GET",
+				headers: {
+					"origin": "https://www.roblox.com",
+					"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:79.0) Gecko/20100101 Firefox/79.0",
+					"connection": "keep-alive",
+				}
+			});
 
-		// Convert to JSON
-		const reqJSON = await req.json();
+			// Convert to JSON
+			const reqJSON = await req.json();
+			for (const data in reqJSON.data) {
+				if (data.id == jobId) {
+					return true;
+				}
+			}
 
-		// Did it return the joinScriptUrl?
-		if (reqJSON && reqJSON.status == 2) {
-			const joinScriptReq = await fetch(new Request(reqJSON.joinScriptUrl)); // We have to fetch the URL
-			let joinScriptJSON = await joinScriptReq.text(); // Returns the text of the request
-			joinScriptJSON = JSON.parse(joinScriptJSON.replace(/--.*\r\n/, '')); // This line is needed to prevent JSON parse errors
-			// Validate the MachineAddress matches the request IP
-			// or the ASN is Roblox's if it is a private server of
-			// some kind
-			if (joinScriptJSON && (joinScriptJSON.MachineAddress == ip && reqJSON.jobId == jobId)) {
-				return true;
-			}
-		} else if (reqJSON && reqJSON.status == 12) {
-			if (asn == robloxASN && reqJSON.jobId == `JoinGame=${placeId};${jobId}`) {
-				return true;
-			}
+			// // Did it return the joinScriptUrl?
+			// if (reqJSON && reqJSON.status == 2) {
+			// 	const joinScriptReq = await fetch(new Request(reqJSON.joinScriptUrl)); // We have to fetch the URL
+			// 	let joinScriptJSON = await joinScriptReq.text(); // Returns the text of the request
+			// 	joinScriptJSON = JSON.parse(joinScriptJSON.replace(/--.*\r\n/, '')); // This line is needed to prevent JSON parse errors
+			// 	// Validate the MachineAddress matches the request IP
+			// 	// or the ASN is Roblox's if it is a private server of
+			// 	// some kind
+			// 	if (joinScriptJSON && (joinScriptJSON.MachineAddress == ip && reqJSON.jobId == jobId)) {
+			// 		return true;
+			// 	}
+			// } else if (reqJSON && reqJSON.status == 12) {
+			// 	if (asn == robloxASN && reqJSON.jobId == `JoinGame=${placeId};${jobId}`) {
+			// 		return true;
+			// 	}
+			// }
+		} catch(ex) {
+			return ex; // Return the exception for debugging purposes
 		}
-	} catch(ex) {
-		return ex; // Return the exception for debugging purposes
 	}
 
 	// Ultimately returns false if all checks above fail
@@ -75,18 +80,18 @@ export async function validateRunningInstance(ip, placeId, jobId, asn) {
 	running in it - this is what is protecting the backend
 	from spoofed requests
 */
-export async function validateInstance(ip, placeId, jobId, GUID, asn) {
+export async function validateInstance(req, jobId, GUID) {
 	// Checks if the instance exists on Roblox
 	// If it does exist, further checks are made
 	// to validate the server
-	const validInstance = await validateRunningInstance(ip, placeId, jobId, asn);
+	const validInstance = await validateRunningInstance(req, jobId);
 	if (validInstance) {
 		// Checks with database for the instance
 		// of the game, if it does exist, then it
 		// will return true - or just return false
 		// if it isn't valid
-		const instanceExists = await getData("findInstance", [jobId, placeId, GUID, ip]);
-		if (instanceExists && instanceExists.GUID == GUID && instanceExists.jobId == jobId && instanceExists.ip == ip) { // one final sanity check
+		const instanceExists = await getData("findInstance", [jobId, req.headers.get("roblox-id"), GUID]);
+		if (instanceExists && instanceExists.GUID == GUID && instanceExists.jobId == jobId) { // one final sanity check
 			return true;
 		}
 	}
@@ -101,16 +106,15 @@ export async function validateInstance(ip, placeId, jobId, GUID, asn) {
 	Adds a instance after validation to the
 	database of known instances
 */
-export async function addInstance(ip, placeId, jobId, GUID, asn) {
+export async function addInstance(req, jobId, GUID) {
 	// Validate the instance first
-	const validInstance = await validateRunningInstance(ip, placeId, jobId, asn);
+	const validInstance = await validateRunningInstance(req, jobId);
 	if (validInstance) {
-		const exists = await getData("findInstanceIsRegistered", [ip, placeId, jobId]);
+		const exists = await getData("findInstanceIsRegistered", [jobId, req.headers.get("roblox-id")]);
 		if (!exists) {
 			// Write to the database with the given GUID
 			const success = await writeData("servers", {
-				"ip": ip,
-				"placeId": placeId,
+				"placeId": req.headers.get("roblox-id"),
 				"jobId": jobId,
 				"GUID": GUID
 			});
@@ -132,7 +136,7 @@ export async function addInstance(ip, placeId, jobId, GUID, asn) {
 	be called when the game is shutting down
 	cause then subsequent requests will fail
 */
-export async function removeInstance(ip, robloxId, jobId, GUID) {
-	const deleted = await deleteData("findInstance", [jobId, robloxId, GUID, ip]);
+export async function removeInstance(req, jobId, GUID) {
+	const deleted = await deleteData("findInstance", [jobId, req.headers.get("roblox-id"), GUID]);
 	return deleted == true ? true : false;
 }

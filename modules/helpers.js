@@ -118,7 +118,7 @@ end;]]></ProtectedString>
 					<Content name="LinkedSource"><null></null></Content>
 					<string name="Name">LSource</string>
 					<string name="ScriptGuid"></string>
-					<ProtectedString name="Source">return function()${code} end;</ProtectedString>
+					<ProtectedString name="Source"><![CDATA[return function()${code} end;]]></ProtectedString>
 					<int64 name="SourceAssetId">-1</int64>
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>

@@ -32,11 +32,11 @@ module.exports = {
 An example wrangler.toml:
 
 ```
+compatibility_date = "2022-09-14"
 name = "script-builder-backend"
-type = "webpack"
-webpack_config = "webpack.config.js"
-account_id = "abcd123"
+account_id = "abc123"
 workers_dev = true
-route = "example.com/*"
-zone_id = "abcd123"
+route = { pattern = "*", zone_id = "abc123" }
+main = "./index"
+node_compat = true
 ```
